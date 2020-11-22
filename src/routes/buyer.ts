@@ -1,15 +1,18 @@
 import express from "express";
 
 //? Importing the buyer model
-import Buyer from "../db/buyer";
+import Buyer, { IErrorInFindingUser, ISuccessFindingUser } from "../db/buyer";
 
 //? Package to verify token
 import jwt from "jsonwebtoken";
 
 const router = express.Router();
 
-//TODO make a sign in route and sign out route and sign out all route
-//TODO remove token from the buyer model
+//^ Interfaces to easily deal with request data
+interface ILoginData {
+  email: string;
+  password: string;
+}
 
 //~ The basic CRUD operations
 
@@ -65,13 +68,20 @@ router.delete("/buyer", async (req, res) => {
 
 //? Sign in route
 router.post("/buyer/login", async (req, res) => {
-  const data = req.body;
+  const data: ILoginData = req.body;
   try {
-    let token = await Buyer.SignInToUser(data.email, data.password);
-    if (!token) {
-      throw new Error("Token not found");
+    const userData = await Buyer.SignInToUser(data.email, data.password);
+    const errorData = userData as IErrorInFindingUser;
+    const successData = userData as ISuccessFindingUser;
+
+    if (successData.token) {
+      const { token, firstName, lastName, age, email } = successData;
+      res.send({ token, firstName, lastName, age, email });
+    } else if (errorData.errorMsg) {
+      res.status(errorData.httpCode).send({
+        errorMessage: errorData.errorMsg,
+      });
     }
-    res.send(token);
   } catch (e) {
     res.status(500).send(e);
   }

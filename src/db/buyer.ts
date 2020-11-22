@@ -4,8 +4,38 @@ import { Document, model, Model, Schema } from "mongoose";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 
-//TODO hash the password before saving it
-//TODO return the user data after saving it
+//^ Interfaces to easily deal with data
+
+//& Error interfaces
+interface IErrorInFindingUser {
+  errorMsg: string;
+  httpCode: number;
+}
+
+//* Success interfaces
+
+interface ISuccessFindingUser {
+  token: string;
+  firstName: string;
+  lastName: string;
+  age: number;
+  email: string;
+}
+
+//? Interfaces and functions to deal with type checking
+// interface ICheckErrorFunction {
+//   //  (data: ISuccessFindingUser | IErrorInFindingUser) : IErrorInFindingUser;
+//   (data: any) : IErrorInFindingUser;
+
+// }
+
+// // const instanceOfError:ICheckErrorFunction = (data:any) : data is IErrorInFindingUser {
+// //   return "errorMsg" in data;
+// // }
+
+// interface ICheckSuccessFunction {
+//   (data: ISuccessFindingUser | IErrorInFindingUser): ISuccessFindingUser;
+// }
 
 //? The schema to the buyer model
 const buyerSchema: Schema = new Schema(
@@ -74,28 +104,43 @@ buyerSchema.pre<IBuyer>("save", async function (next) {
 buyerSchema.statics.SignInToUser = async function (
   email: string,
   password: string
-): Promise<string | null> {
+): Promise<ISuccessFindingUser | IErrorInFindingUser> {
   let buyer = await Buyer.findOne({ em: email });
   if (!buyer) {
-    return null;
+    return {
+      errorMsg: "User doesn't exists",
+      httpCode: 406,
+    };
   }
 
   let isMatch = await bcrypt.compare(password, buyer.pw);
   if (!isMatch) {
-    return null;
+    return {
+      errorMsg: "Invalid authentication information",
+      httpCode: 406,
+    };
   }
 
   let token = jwt.sign({ id: buyer._id }, "1234567890");
 
   if (!token) {
-    return null;
+    return {
+      errorMsg: "There is a problem with generating a token",
+      httpCode: 500,
+    };
   }
 
   await Buyer.findByIdAndUpdate(buyer._id, {
     tokens: buyer.tokens.concat([token]),
   });
 
-  return token;
+  return {
+    token,
+    firstName: buyer.fn,
+    lastName: buyer.ln,
+    age: buyer.a,
+    email: buyer.em,
+  };
 };
 
 //? the buyer model
@@ -111,9 +156,13 @@ interface IBuyer extends Document {
 }
 
 interface IBuyerModel extends Model<IBuyer> {
-  SignInToUser: (email: string, password: string) => Promise<string | null>;
+  SignInToUser: (
+    email: string,
+    password: string
+  ) => Promise<ISuccessFindingUser | IErrorInFindingUser>;
 }
 
 const Buyer: IBuyerModel = model<IBuyer, IBuyerModel>("Buyer", buyerSchema);
 
 export default Buyer;
+export { ISuccessFindingUser, IErrorInFindingUser };
